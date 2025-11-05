@@ -416,7 +416,7 @@ class Inovio_Direct_Method extends WC_Payment_Gateway {
  * @return array $method
  */
 function add_inovio_class( $method ) {
-    $method[] = 'Woocommerce_Inovio_Gateway';
+    $method[] = 'Inovio_Direct_Method';
 
     return $method;
 }

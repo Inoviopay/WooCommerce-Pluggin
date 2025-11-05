@@ -348,25 +348,268 @@ echo -e "${GREEN}✓ Checksums generated${NC}"
 echo ""
 
 ################################################################################
+# Changelog Generation Functions
+################################################################################
+
+# Parse commit type and categorize
+parse_commit_type() {
+    local subject="$1"
+    local body="$2"
+
+    # Check for breaking changes first (highest priority)
+    if echo "$body" | grep -qi "breaking"; then
+        echo "Breaking"
+        return
+    fi
+
+    # Check for security issues
+    if echo "$subject$body" | grep -Eqi "(security|vulnerability|cve)"; then
+        echo "Security"
+        return
+    fi
+
+    # Parse subject line for type keywords
+    if echo "$subject" | grep -Eqi "^(feat|feature|add|added|new)"; then
+        echo "Added"
+        return
+    fi
+
+    if echo "$subject" | grep -Eqi "^(fix|fixed|bug|resolve)"; then
+        echo "Fixed"
+        return
+    fi
+
+    if echo "$subject" | grep -Eqi "^(update|improve|refactor|change|perf|optimize)"; then
+        echo "Changed"
+        return
+    fi
+
+    if echo "$subject" | grep -Eqi "^(docs|documentation)"; then
+        echo "Documentation"
+        return
+    fi
+
+    # Fallback: check for keywords anywhere in subject
+    if echo "$subject" | grep -Eqi "(fix|bug|issue)"; then
+        echo "Fixed"
+    elif echo "$subject" | grep -Eqi "(add|new|feature)"; then
+        echo "Added"
+    elif echo "$subject" | grep -Eqi "(update|improve|change)"; then
+        echo "Changed"
+    else
+        echo "Other"
+    fi
+}
+
+# Format changelog as WordPress readme.txt format
+format_wordpress_changelog() {
+    local version="$1"
+    local date="$2"
+    local commits_str="$3"
+
+    echo "= ${version} - ${date} ="
+
+    # Process commits by type in order
+    for type in "Breaking" "Security" "Added" "Fixed" "Changed" "Documentation" "Other"; do
+        local found_type=0
+        echo "$commits_str" | while IFS='|' read -r hash subject body issue_ref; do
+            local commit_type=$(parse_commit_type "$subject" "$body")
+
+            if [ "$commit_type" = "$type" ]; then
+                # Clean up subject - remove conventional commit prefix if present
+                clean_subject=$(echo "$subject" | sed -E 's/^(feat|fix|docs|style|refactor|perf|test|chore)(\([^)]+\))?:\s*//')
+
+                if [ -n "$issue_ref" ]; then
+                    echo "* ${type}: ${clean_subject} (#${issue_ref})"
+                else
+                    echo "* ${type}: ${clean_subject}"
+                fi
+            fi
+        done
+    done
+}
+
+# Format changelog as GitHub release notes
+format_github_release_notes() {
+    local version="$1"
+    local commits_str="$2"
+    local previous_tag="$3"
+
+    echo "## What's Changed"
+    echo ""
+
+    # Process commits by type in order with section headers
+    for type in "Breaking" "Security" "Added" "Fixed" "Changed" "Documentation" "Other"; do
+        local has_commits=0
+        # First pass: check if we have commits of this type
+        echo "$commits_str" | while IFS='|' read -r hash subject body issue_ref; do
+            local commit_type=$(parse_commit_type "$subject" "$body")
+            if [ "$commit_type" = "$type" ]; then
+                has_commits=1
+                break
+            fi
+        done
+
+        # Second pass: output commits if we found any
+        local type_output=""
+        echo "$commits_str" | while IFS='|' read -r hash subject body issue_ref; do
+            local commit_type=$(parse_commit_type "$subject" "$body")
+
+            if [ "$commit_type" = "$type" ]; then
+                # Clean up subject
+                clean_subject=$(echo "$subject" | sed -E 's/^(feat|fix|docs|style|refactor|perf|test|chore)(\([^)]+\))?:\s*//')
+
+                # Output section header on first match
+                if [ -z "$type_output" ]; then
+                    echo "### ${type}"
+                    echo ""
+                    type_output="1"
+                fi
+
+                if [ -n "$issue_ref" ]; then
+                    echo "- **${clean_subject}** ([#${issue_ref}](${REMOTE_URL/git@github.com:/https://github.com/}/issues/${issue_ref})) (${hash})"
+                else
+                    echo "- **${clean_subject}** (${hash})"
+                fi
+            fi
+        done
+        [ -n "$type_output" ] && echo ""
+    done
+
+    echo "**Full Changelog**: ${REMOTE_URL/git@github.com:/https://github.com/}/compare/${previous_tag}...v${version}"
+}
+
+# Generate changelog from git commits
+generate_changelog_from_commits() {
+    local current_version="$1"
+    local format="${2:-wordpress}"  # wordpress or github
+
+    # Find previous release tag
+    local previous_tag=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+
+    # Handle first release
+    if [ -z "$previous_tag" ] || ! git rev-parse "$previous_tag" >/dev/null 2>&1; then
+        previous_tag=$(git rev-list --max-parents=0 HEAD)
+        echo -e "${YELLOW}⚠ First release - including all commits from repository start${NC}" >&2
+    fi
+
+    # Get commits between previous tag and HEAD as string
+    local commits_str=""
+    local temp_file="/tmp/git_log_$$.txt"
+    git log --pretty=format:"%h|||%s|||%b|||COMMIT_END" "${previous_tag}..HEAD" 2>/dev/null > "$temp_file"
+
+    # Process commits from temp file
+    while IFS= read -r commit_block; do
+        # Parse: hash|||subject|||body|||COMMIT_END
+        local hash=$(echo "$commit_block" | cut -d'|||' -f1)
+        local subject=$(echo "$commit_block" | cut -d'|||' -f2)
+        local body=$(echo "$commit_block" | cut -d'|||' -f3)
+
+        # Skip empty lines
+        [ -z "$hash" ] && continue
+
+        # Skip version bump commits
+        if echo "$subject" | grep -Eqi "^(bump|release|version).*version"; then
+            continue
+        fi
+
+        # Skip merge commits (optional)
+        if echo "$subject" | grep -Eqi "^merge"; then
+            continue
+        fi
+
+        # Extract issue reference from body
+        local issue_ref=$(echo "$body" | grep -Eo "(Resolves|Fixes|Closes) #([0-9]+)" | grep -Eo "[0-9]+" | head -1)
+
+        # Append to commits string: hash|subject|body|issue_ref
+        if [ -n "$commits_str" ]; then
+            commits_str="${commits_str}"$'\n'"${hash}|${subject}|${body}|${issue_ref}"
+        else
+            commits_str="${hash}|${subject}|${body}|${issue_ref}"
+        fi
+    done < <(tr '\n' ' ' < "$temp_file" | sed 's/|||COMMIT_END/\n/g')
+
+    rm -f "$temp_file"
+
+    # Check if there are any commits
+    if [ -z "$commits_str" ]; then
+        echo -e "${YELLOW}⚠ No commits found since ${previous_tag}${NC}" >&2
+        echo "No changes in this release."
+        return
+    fi
+
+    # Format output
+    local release_date=$(date +%Y-%m-%d)
+
+    if [ "$format" = "wordpress" ]; then
+        format_wordpress_changelog "$current_version" "$release_date" "$commits_str"
+    elif [ "$format" = "github" ]; then
+        format_github_release_notes "$current_version" "$commits_str" "$previous_tag"
+    fi
+}
+
+################################################################################
 # Step 8: Publish GitHub Release
 ################################################################################
 
 echo -e "${BLUE}[8/8]${NC} Publishing GitHub release..."
 
-# Extract release notes from readme.txt
+# Generate release notes from git commits
 NOTES_FILE="${BUILD_DIR}/release-notes.txt"
 echo "Inovio Payment Gateway for WooCommerce v${VERSION}" > "$NOTES_FILE"
 echo "" >> "$NOTES_FILE"
-echo "## Changes" >> "$NOTES_FILE"
 
-# Try to extract changelog for this version from readme.txt
-if [ -f "${PLUGIN_DIR}/readme.txt" ]; then
-    # Look for version-specific changes or use latest changelog section
-    grep -A 10 "^${VERSION}" "${PLUGIN_DIR}/readme.txt" >> "$NOTES_FILE" 2>/dev/null || \
-    grep -A 10 "== Changelog ==" "${PLUGIN_DIR}/readme.txt" | tail -n +2 >> "$NOTES_FILE" 2>/dev/null || \
-    echo "See repository for changelog details." >> "$NOTES_FILE"
+# Generate changelog from git commits
+echo -e "${YELLOW}Generating changelog from git commits...${NC}"
+changelog_content=$(generate_changelog_from_commits "$VERSION" "github")
+
+if [ -n "$changelog_content" ]; then
+    echo "$changelog_content" >> "$NOTES_FILE"
+    echo -e "${GREEN}✓ Changelog generated from commits${NC}"
+
+    # Update readme.txt with new changelog entry
+    if [ -f "${PLUGIN_DIR}/readme.txt" ]; then
+        echo -e "${YELLOW}Updating readme.txt with new changelog...${NC}"
+
+        # Generate WordPress format changelog
+        wordpress_changelog=$(generate_changelog_from_commits "$VERSION" "wordpress")
+
+        # Find == Changelog == section and insert new entry
+        if grep -q "== Changelog ==" "${PLUGIN_DIR}/readme.txt"; then
+            # Create temp file with updated changelog
+            awk -v new_entry="$wordpress_changelog" '
+                /== Changelog ==/ {
+                    print $0
+                    print ""
+                    print new_entry
+                    print ""
+                    skip_first_blank=1
+                    next
+                }
+                skip_first_blank && /^[[:space:]]*$/ {
+                    skip_first_blank=0
+                    next
+                }
+                { print }
+            ' "${PLUGIN_DIR}/readme.txt" > "${PLUGIN_DIR}/readme.txt.tmp"
+
+            mv "${PLUGIN_DIR}/readme.txt.tmp" "${PLUGIN_DIR}/readme.txt"
+
+            # Commit readme.txt update
+            git add "${PLUGIN_DIR}/readme.txt"
+            if ! git diff-index --quiet HEAD --; then
+                git commit -m "Update changelog for ${VERSION}"
+                echo -e "${GREEN}✓ readme.txt updated and committed${NC}"
+            else
+                echo -e "${YELLOW}⚠ No changelog changes to commit${NC}"
+            fi
+        else
+            echo -e "${YELLOW}⚠ Changelog section not found in readme.txt${NC}"
+        fi
+    fi
 else
-    echo "Distribution package for Inovio Payment Gateway WordPress plugin." >> "$NOTES_FILE"
+    echo -e "${YELLOW}⚠ No commits found for changelog${NC}"
+    echo "See repository for changelog details." >> "$NOTES_FILE"
 fi
 
 echo -e "${YELLOW}Creating git tag v${VERSION}...${NC}"
