@@ -52,14 +52,8 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
         $this->routing_number_validate = $this->get_option( "routing_number_validate" );
         add_action( 'wp_enqueue_scripts', array( $this, 'inovio_ach_payment_script' ) );
 
-        // Check WooCommerce version
-        if ( version_compare( WOOCOMMERCE_VERSION, '2.0.0', '>=' ) ) {
-            add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array ( &$this, 'process_admin_options' ) );
-        } else {
-            add_action( 'woocommerce_update_options_payment_gateways', array( &$this, 'process_admin_options' ) );
-        }
-
-        // add js in Inovio gateway
+        // Register settings save hook
+        add_action( 'woocommerce_update_options_payment_gateways_' . $this->id, array ( &$this, 'process_admin_options' ) );
     }
 
     /**
@@ -164,8 +158,13 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
 
         $order = new WC_Order( $order_id );
         global $wpdb;
-        $qry = "SELECT sum( ach_inovio_refunded_amount ) as  already_refunded_amount from {$wpdb->prefix}ach_inovio_refunded as t1 WHERE t1.ach_inovio_order_id=$order_id";
-        $resultset = $wpdb->prepare( get_results( $qry, OBJECT ) );
+        $qry = $wpdb->prepare(
+            "SELECT sum( ach_inovio_refunded_amount ) as already_refunded_amount
+             FROM {$wpdb->prefix}ach_inovio_refunded
+             WHERE ach_inovio_order_id = %d",
+            $order_id
+        );
+        $resultset = $wpdb->get_results( $qry, OBJECT );
 
         return $resultset[0]->already_refunded_amount;
     }
@@ -220,8 +219,8 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
         global $woocommerce;
 
         $order = wc_get_order( $order_id );
-        $routing_number = !empty( wc_clean( $_POST['ach_inovio_routing_number'] ) ) ? str_replace(array( ' ', '-' ), '', woocommerce_clean( $_POST['ach_inovio_routing_number'] ) ) : '';
-        $account_number = !empty( wc_clean( $_POST['ach_inovio_account_number'] ) ) ? woocommerce_clean( $_POST['ach_inovio_account_number'] ) : '';
+        $routing_number = !empty( wc_clean( $_POST['ach_inovio_routing_number'] ) ) ? str_replace(array( ' ', '-' ), '', wc_clean( $_POST['ach_inovio_routing_number'] ) ) : '';
+        $account_number = !empty( wc_clean( $_POST['ach_inovio_account_number'] ) ) ? wc_clean( $_POST['ach_inovio_account_number'] ) : '';
         try {
             if ( empty( $account_number ) ) {
                 throw new Exception( __( 'Please enter account number', $this->id ) );
@@ -281,11 +280,12 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
 
                     // Add order note
                     $order->add_order_note( 'payment has been completed by ACH inovio payment gateway and Transaction Id:' . $parse_result->PO_ID );
-                    
-                    // Payment complete add PO_ID as transaction id in post_meta table
-                    add_post_meta( $order->id, '_achtransaction_id', $parse_result->PO_ID,true );
-                    $order->update_status( 'processing' );            
-                   
+
+                    // Payment complete add PO_ID as transaction id in order meta
+                    $order->add_meta_data( '_achtransaction_id', $parse_result->PO_ID, true );
+                    $order->save();
+                    $order->update_status( 'processing' );
+
 
                     if ( $this->debug == 'yes' ) {
                         // Add log
@@ -293,8 +293,8 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
                         $this->common_class->inovio_logger( print_r( $response, true ), $this );
                     }
 
-                    // Reduce stock
-                    $order->reduce_order_stock();
+                    // Reduce stock - handled automatically by modern WC
+                    wc_reduce_stock_levels( $order_id );
 
                     // Add notice thank you page
                     wc_add_notice( $thankyou_msg, 'success' );
@@ -320,7 +320,8 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
                     // Add note
                     $order->add_order_note( sprintf( __( 'TransactionID %s', $this->id ), $parse_result->PO_ID ) );
 
-                    add_post_meta( $order_id, '_achtransaction_id', $parse_result->PO_ID, true );
+                    $order->add_meta_data( '_achtransaction_id', $parse_result->PO_ID, true );
+                    $order->save();
 
                     // Payment failed
                     $order->update_status( 'failed', sprintf( __( 'ACH payment failed. Payment was rejected due to an error%s', $this->id ) ) );
@@ -363,7 +364,7 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
  * @return array $method
  */
 function add_ach_inovio_class( $method ) {
-    $method[] = 'Ach_Inovio_Method';
+    $method[] = 'Woocommerce_Ach_Inovio_Gateway';
 
     return $method;
 }
