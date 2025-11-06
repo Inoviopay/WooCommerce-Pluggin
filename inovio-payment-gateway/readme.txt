@@ -48,6 +48,9 @@ Process 2
 Get answers on pricing, feature implementation, API integration, and more... at clientsupport@inoviopay.com
 
 == Changelog ==
+
+No changes in this release.
+
 = 5.1.0 - 2025-01-03 =
 * Major Update: Full WooCommerce 10.x and HPOS (High-Performance Order Storage) compatibility
 * Fixed: Replaced deprecated $order->id with $order->get_id() for HPOS compatibility
@@ -60,6 +63,5 @@ Get answers on pricing, feature implementation, API integration, and more... at 
 * Improved: Added proper database indexes for better performance
 * Updated: Minimum requirements - WordPress 6.0+, WooCommerce 7.0+, PHP 7.4+
 * Declared: Official HPOS/Custom Order Tables compatibility
-
 = 4.4.23 - 2020-06-18 =
 * Added: Recurring payment/subscription functionality
