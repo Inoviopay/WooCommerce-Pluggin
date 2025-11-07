@@ -626,7 +626,7 @@ if [ -n "$changelog_content" ]; then
         echo -e "${YELLOW}Updating readme.txt with new changelog...${NC}"
 
         # Generate WordPress format changelog to a temp file (avoids awk -v newline issues)
-        local changelog_tmp="/tmp/changelog_$$.txt"
+        changelog_tmp="/tmp/changelog_$$.txt"
         generate_changelog_from_commits "$VERSION" "wordpress" > "$changelog_tmp"
 
         # Find == Changelog == section and insert new entry
