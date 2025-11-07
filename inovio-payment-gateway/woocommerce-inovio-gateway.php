@@ -28,6 +28,13 @@ add_action( 'before_woocommerce_init', function() {
             __FILE__,
             true
         );
+
+        // Declare Cart & Checkout Blocks compatibility
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility(
+            'cart_checkout_blocks',
+            __FILE__,
+            true
+        );
     }
 } );
 
@@ -159,4 +166,31 @@ function Woocommerce_Inovio_init() {
             echo '<p><strong>Terms of Service: </strong> <span style="color:red;">enabled</span></p>';
         }
     }
-    
+
+// Register WooCommerce Blocks support
+add_action( 'woocommerce_blocks_loaded', 'inovio_register_blocks_support' );
+
+/**
+ * Register payment method integration with WooCommerce Blocks
+ *
+ * @return void
+ */
+function inovio_register_blocks_support() {
+    // Check if required class exists
+    if ( ! class_exists( 'Automattic\WooCommerce\Blocks\Payments\Integrations\AbstractPaymentMethodType' ) ) {
+        return;
+    }
+
+    // Load blocks support classes
+    require_once plugin_dir_path( __FILE__ ) . 'includes/inoviopay/blocks/class-wc-inovio-blocks-support.php';
+    require_once plugin_dir_path( __FILE__ ) . 'includes/ach/blocks/class-wc-ach-inovio-blocks-support.php';
+
+    // Register payment method types
+    add_action(
+        'woocommerce_blocks_payment_method_type_registration',
+        function( Automattic\WooCommerce\Blocks\Payments\PaymentMethodRegistry $payment_method_registry ) {
+            $payment_method_registry->register( new WC_Inovio_Blocks_Support() );
+            $payment_method_registry->register( new WC_Ach_Inovio_Blocks_Support() );
+        }
+    );
+}

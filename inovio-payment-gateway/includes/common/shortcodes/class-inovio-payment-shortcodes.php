@@ -53,6 +53,7 @@ class inovio_payment_shortcodes {
                 'title' => __( 'API End Point' ),
                 'type' => 'text',
                 'description' => __( 'Inovio Gateway API URL.' ),
+                'default' => 'https://api.inoviopay.com/payment/pmt_service.cfm',
                 'custom_attributes' => array (
                     'required' => __( 'required' ),
                 ),

@@ -69,8 +69,8 @@ class class_common_inovio_payment {
         // Getting Service response
         if ( 100 != $parse_result->SERVICE_RESPONSE ) {
             if ( $options->debug == 'yes' ) :
-                $this->inovio_logger( 'Authentication Failed' );
-                $this->inovio_logger( $response );
+                $this->inovio_logger( 'Authentication Failed', $options );
+                $this->inovio_logger( $response, $options );
             endif;
 
             return false;
@@ -85,18 +85,33 @@ class class_common_inovio_payment {
      * @return array $requestParams
      */
     public function merchant_credential( $options ) {
+        // Get settings directly from database to ensure they're always available
+        // This is more reliable than using instance properties which may not be initialized
+        // Use the actual database key names (api_endpoint, user_id, password) not the property names
+        $api_endpoint = $options->get_option( 'api_endpoint' );
+        $site_id = $options->get_option( 'site_id' );
+        $req_username = $options->get_option( 'user_id' );
+        $req_password = $options->get_option( 'password' );
+
+        // Debug logging
+        $this->inovio_logger( 'DEBUG merchant_credential: api_endpoint = ' . ( $api_endpoint ? 'SET' : 'NOT SET' ), $options );
+        $this->inovio_logger( 'DEBUG merchant_credential: site_id = ' . ( $site_id ? 'SET' : 'NOT SET' ), $options );
+        $this->inovio_logger( 'DEBUG merchant_credential: req_username = ' . ( $req_username ? 'SET' : 'NOT SET' ), $options );
+        $this->inovio_logger( 'DEBUG merchant_credential: req_password = ' . ( $req_password ? 'SET' : 'NOT SET' ), $options );
+
         $request_params = [
-            'end_point' => $options->api_endpoint,
-            'site_id' => $options->site_id,
-            'req_username' => $options->req_username,
-            'req_password' => $options->req_password,
+            'end_point' => $api_endpoint,
+            'site_id' => $site_id,
+            'req_username' => $req_username,
+            'req_password' => $req_password,
         ];
         $final_request_params = [];
         foreach ( $request_params as $reqKey => $reqParamVal ) {
-            if ( empty( $request_params[$reqKey] ) ) {
+            if ( empty( $reqParamVal ) ) {
+                $this->inovio_logger( 'ERROR merchant_credential: Missing field = ' . $reqKey, $options );
                 throw new Exception(
                 __(
-                        'Something went wrong, please contact to your service provider'
+                        'Payment gateway configuration error. Please contact administrator. (Missing: ' . $reqKey . ')'
                 )
                 );
             }
@@ -174,6 +189,10 @@ class class_common_inovio_payment {
         } elseif ( !empty( $post_data["inoviodirectmethod_gate_card_cvv"] ) && strlen( $post_data["inoviodirectmethod_gate_card_cvv"]) <= 4 && $post_data["payment_method"] == "inoviodirectmethod" ) {
             $pmt_key_or_routing_number = ["pmt_key" => wc_clean( $post_data["inoviodirectmethod_gate_card_cvv"] )];
             $pmt_number = $post_data["inoviodirectmethod_gate_card_numbers"];
+        } elseif ( !empty( $post_data["card_cvv"] ) && strlen( $post_data["card_cvv"]) <= 4 ) {
+            // WooCommerce Blocks format
+            $pmt_key_or_routing_number = ["pmt_key" => wc_clean( $post_data["card_cvv"] )];
+            $pmt_number = isset( $post_data["card_number"] ) ? $post_data["card_number"] : "";
         }
         $params=  [
             'XTL_ORDER_ID' => $order_id,

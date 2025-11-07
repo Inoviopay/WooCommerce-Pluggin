@@ -276,19 +276,95 @@ class Inovio_Direct_Method extends WC_Payment_Gateway {
      */
     public function process_payment( $order_id ) {
         global $woocommerce;
-        $expiry_month = wc_clean( $_POST['exp_month'] );
-        $expiry_year = wc_clean( $_POST['exp_year'] );
         $order = new WC_Order( $order_id );
-        $card_number = !empty( wc_clean( $_POST['inoviodirectmethod_gate_card_numbers'] ) ) ? str_replace( array( ' ', '-' ), '', wc_clean( $_POST['inoviodirectmethod_gate_card_numbers'] ) ) : '';
-        $card_cvc = !empty( wc_clean( $_POST['inoviodirectmethod_gate_card_cvv'] ) ) ? wc_clean( $_POST['inoviodirectmethod_gate_card_cvv'] ) : '';
+
+        // Handle payment data from both legacy checkout and WooCommerce Blocks
+        $card_number = '';
+        $card_cvc = '';
+        $expiry_month = '';
+        $expiry_year = '';
+
+        // Debug logging to understand payment_data structure
+        $this->common_class->inovio_logger( 'DEBUG: Full $_POST keys: ' . implode(', ', array_keys($_POST)), $this );
+        $this->common_class->inovio_logger( 'DEBUG: payment_data isset: ' . (isset($_POST['payment_data']) ? 'yes' : 'no'), $this );
+        $this->common_class->inovio_logger( 'DEBUG: card_number isset: ' . (isset($_POST['card_number']) ? 'yes' : 'no'), $this );
+
+        // Check for WooCommerce Blocks payment data - Method 1: Direct POST keys
+        $is_blocks_checkout = false;
+        if ( isset( $_POST['card_number'] ) ) {
+            $is_blocks_checkout = true;
+            $this->common_class->inovio_logger( 'DEBUG: Using direct POST keys from WooCommerce Blocks', $this );
+
+            $card_number = str_replace( array( ' ', '-' ), '', wc_clean( $_POST['card_number'] ) );
+            $card_cvc = isset( $_POST['card_cvv'] ) ? wc_clean( $_POST['card_cvv'] ) : '';
+
+            if ( isset( $_POST['card_expiry'] ) ) {
+                $expiry = wc_clean( $_POST['card_expiry'] );
+                if ( strlen( $expiry ) === 6 ) {
+                    // MMYYYY format (e.g., "122025")
+                    $expiry_month = substr( $expiry, 0, 2 );
+                    $expiry_year = substr( $expiry, 2, 4 );
+                } elseif ( strlen( $expiry ) === 4 ) {
+                    // Fallback for MMYY format (legacy)
+                    $expiry_month = substr( $expiry, 0, 2 );
+                    $expiry_year = substr( $expiry, 2, 2 );
+                }
+            }
+        }
+        // Method 2: payment_data wrapper (alternative format)
+        elseif ( isset( $_POST['payment_data'] ) ) {
+            $is_blocks_checkout = true;
+            $this->common_class->inovio_logger( 'DEBUG: Using payment_data wrapper', $this );
+
+            $payment_data = is_string( $_POST['payment_data'] )
+                ? json_decode( stripslashes( $_POST['payment_data'] ), true )
+                : $_POST['payment_data'];
+
+            // Handle array of key-value pairs format from WooCommerce Blocks
+            if ( is_array( $payment_data ) && isset( $payment_data[0] ) && is_array( $payment_data[0] ) && isset( $payment_data[0]['key'] ) ) {
+                $this->common_class->inovio_logger( 'DEBUG: Converting key-value array to associative array', $this );
+                $temp = [];
+                foreach ( $payment_data as $item ) {
+                    if ( isset( $item['key'] ) && isset( $item['value'] ) ) {
+                        $temp[ $item['key'] ] = $item['value'];
+                    }
+                }
+                $payment_data = $temp;
+            }
+
+            if ( isset( $payment_data['card_number'] ) ) {
+                $card_number = str_replace( array( ' ', '-' ), '', wc_clean( $payment_data['card_number'] ) );
+            }
+            if ( isset( $payment_data['card_cvv'] ) ) {
+                $card_cvc = wc_clean( $payment_data['card_cvv'] );
+            }
+            if ( isset( $payment_data['card_expiry'] ) ) {
+                // Card expiry is in MMYY format
+                $expiry = wc_clean( $payment_data['card_expiry'] );
+                if ( strlen( $expiry ) === 4 ) {
+                    $expiry_month = substr( $expiry, 0, 2 );
+                    $expiry_year = substr( $expiry, 2, 2 );
+                }
+            }
+        }
+
+        // Fallback to legacy checkout data
+        if ( empty( $card_number ) ) {
+            $expiry_month = wc_clean( $_POST['exp_month'] ?? '' );
+            $expiry_year = wc_clean( $_POST['exp_year'] ?? '' );
+            $card_number = !empty( wc_clean( $_POST['inoviodirectmethod_gate_card_numbers'] ?? '' ) )
+                ? str_replace( array( ' ', '-' ), '', wc_clean( $_POST['inoviodirectmethod_gate_card_numbers'] ) )
+                : '';
+            $card_cvc = !empty( wc_clean( $_POST['inoviodirectmethod_gate_card_cvv'] ?? '' ) )
+                ? wc_clean( $_POST['inoviodirectmethod_gate_card_cvv'] )
+                : '';
+        }
         try {
             if ( empty( $card_number ) ) {
                 throw new Exception( __( 'Please Enter Card number', $this->id ) );
             } elseif ( empty( $expiry_month ) || empty( $expiry_year ) ) {
                 throw new Exception( __( 'Please Enter Card expiration date', $this->id ) );
-            } elseif ( $this->common_class->validate_expirydate( $expiry_year . $expiry_month) == false ) {
-                throw new Exception( __( 'Invalid Credit Card Expiration date', $this->id ) );
-            } elseif ( empty( $card_cvc ) ) { // check expiry date
+            } elseif ( empty( $card_cvc ) ) { // check CVV
                 throw new Exception( __( 'Please Enter Card CVV number', $this->id ) );
             }
             // Restrict product's quantity
@@ -316,11 +392,22 @@ class Inovio_Direct_Method extends WC_Payment_Gateway {
                 );
                 $final_params = $params + $this->common_class->get_advaceparam($this);
                 $status = 'WC-' . $order_id . '-' . time();
+                // Log request parameters
+                $this->common_class->inovio_logger( 'Request Parameters: ' . json_encode($final_params), $this );
+
                 $service_config = new InovioServiceConfig( $final_params );
                 $processor = new InovioProcessor( $service_config );
                 // Set method auth and capture
                 $response = $processor->set_methodname( 'auth_and_capture' )->get_response();
+
+                // Log raw response string
+                $this->common_class->inovio_logger( 'Raw Gateway Response: ' . $response, $this );
+
                 $parse_result = json_decode( $response );
+
+                // Log parsed response
+                $this->common_class->inovio_logger( 'Parsed Gateway Response: ' . json_encode($parse_result), $this );
+
                 $order->update_meta_data( '_inovio_gateway_scheduled_first_request', json_encode( $params ) );
                 $order->update_meta_data( 'uniqid', $uniqid );
                 $order->update_meta_data( 'CUST_ID', $parse_result->CUST_ID );
@@ -330,15 +417,16 @@ class Inovio_Direct_Method extends WC_Payment_Gateway {
                 $order->update_meta_data( 'TRANS_ID', $parse_result->TRANS_ID );
                 $order->update_meta_data( '_inovio_gateway_scheduled_first_response', json_encode( $parse_result ) );
                 $order->save();
-                
-                // check card length
-                if ( isset( $parse_result->REF_FIELD ) && 'pmt_numb' == strtolower( $parse_result->REF_FIELD ) ) {
-                    throw new Exception( __( 'Error Invalid Credit Card Length', $this->id ) );
-                }
 
-                // check card expiry date
-                if ( isset( $parse_result->REF_FIELD ) && 'pmt_expiry' == strtolower( $parse_result->REF_FIELD ) ) {
-                    throw new Exception( __( 'Error Invalid Card Expiry date', $this->id ) );
+                // Check for any gateway field validation error
+                if ( isset( $parse_result->REF_FIELD ) && !empty( $parse_result->REF_FIELD ) ) {
+                    // Show the raw gateway error message for any field error
+                    $gateway_error = isset( $parse_result->API_ADVICE ) ? $parse_result->API_ADVICE : 'Gateway validation error';
+                    $gateway_error .= ' (Field: ' . $parse_result->REF_FIELD . ')';
+                    if ( isset( $parse_result->SERVICE_ADVICE ) && !empty( trim( $parse_result->SERVICE_ADVICE ) ) ) {
+                        $gateway_error .= ' - ' . $parse_result->SERVICE_ADVICE;
+                    }
+                    throw new Exception( __( $gateway_error, $this->id ) );
                 }
                 if (
                         isset( $parse_result->TRANS_STATUS_NAME ) &&
@@ -374,7 +462,7 @@ class Inovio_Direct_Method extends WC_Payment_Gateway {
                         'result' => 'success',
                         'redirect' => $this->get_return_url( $order ),
                     );
-                } elseif ( !empty( $parse_result->API_ADVICE ) || empty( $parse_result->SERVICE_ADVICE ) ) {
+                } elseif ( !empty( $parse_result->API_ADVICE ) || !empty( $parse_result->SERVICE_ADVICE ) ) {
                     $status = 'ERROR';
 
                     // Add note
@@ -382,28 +470,41 @@ class Inovio_Direct_Method extends WC_Payment_Gateway {
                     $order->add_meta_data( '_inoviotransaction_id', $parse_result->PO_ID, true );
                     $order->save();
 
-                    // Payment failed
-                    $order->update_status( 'failed', sprintf( __( 'Card payment failed. Payment was rejected due to an error%s', $this->id ) ) );
+                    // Build error message from gateway response
+                    $error_message = '';
+                    if ( isset( $parse_result->TRANS_STATUS_NAME ) && !empty( $parse_result->TRANS_STATUS_NAME ) ) {
+                        $error_message = $parse_result->TRANS_STATUS_NAME;
+                    }
+                    if ( isset( $parse_result->SERVICE_ADVICE ) && !empty( trim( $parse_result->SERVICE_ADVICE ) ) ) {
+                        $error_message .= ( $error_message ? ': ' : '' ) . $parse_result->SERVICE_ADVICE;
+                    } elseif ( isset( $parse_result->API_ADVICE ) && !empty( trim( $parse_result->API_ADVICE ) ) ) {
+                        $error_message .= ( $error_message ? ': ' : '' ) . $parse_result->API_ADVICE;
+                    }
+                    if ( empty( $error_message ) ) {
+                        $error_message = 'Payment was declined';
+                    }
 
-                    // Remove cart
-                    $woocommerce->cart->empty_cart();
+                    // Payment failed
+                    $order->update_status( 'failed', __( 'Card payment failed: ' . $error_message, $this->id ) );
+
+                    // Don't empty cart - let customer retry with different payment method
                     if ( $this->debug == 'yes' ) :
                         // Add log
-                        $this->inovio_logger( 'Transaction Failed', $this );
-                        $this->inovio_logger( $response, $this );
+                        $this->common_class->inovio_logger( 'Transaction Failed', $this );
+                        $this->common_class->inovio_logger( $response, $this );
                     endif;
 
-                    throw new Exception(
-                    __(
-                        'Something went wrong, please contact to your '
-                        . 'service provider.', $this->id
-                    )
-                    );
+                    throw new Exception( __( $error_message, $this->id ) );
                 }
             }
         } catch ( Exception $ex ) { // Add log
             $this->common_class->inovio_logger($ex->getMessage(), $this);
             wc_add_notice( $ex->getMessage(), 'error' );
+            // Return error array to prevent null return value
+            return array(
+                'result'   => 'failure',
+                'messages' => $ex->getMessage()
+            );
         }
     }
 }

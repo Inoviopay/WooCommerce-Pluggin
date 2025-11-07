@@ -145,7 +145,11 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
         } catch ( Exception $ex ) {
 
             $this->common_class->inovio_logger( $ex->getMessage(), $this );
-            return;
+            // Return error array to prevent null return value
+            return array(
+                'result'   => 'failure',
+                'messages' => $ex->getMessage()
+            );
         }
     }
 
@@ -219,8 +223,73 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
         global $woocommerce;
 
         $order = wc_get_order( $order_id );
-        $routing_number = !empty( wc_clean( $_POST['ach_inovio_routing_number'] ) ) ? str_replace(array( ' ', '-' ), '', wc_clean( $_POST['ach_inovio_routing_number'] ) ) : '';
-        $account_number = !empty( wc_clean( $_POST['ach_inovio_account_number'] ) ) ? wc_clean( $_POST['ach_inovio_account_number'] ) : '';
+
+        // Handle payment data from both legacy checkout and WooCommerce Blocks
+        $routing_number = '';
+        $account_number = '';
+        $account_holder = '';
+        $account_type = 'checking';
+
+        // Debug logging to understand payment_data structure
+        $this->common_class->inovio_logger( 'DEBUG ACH: Full $_POST keys: ' . implode(', ', array_keys($_POST)), $this );
+        $this->common_class->inovio_logger( 'DEBUG ACH: payment_data isset: ' . (isset($_POST['payment_data']) ? 'yes' : 'no'), $this );
+        $this->common_class->inovio_logger( 'DEBUG ACH: routing_number isset: ' . (isset($_POST['routing_number']) ? 'yes' : 'no'), $this );
+
+        // Check for WooCommerce Blocks payment data - Method 1: Direct POST keys
+        $is_blocks_checkout = false;
+        if ( isset( $_POST['routing_number'] ) ) {
+            $is_blocks_checkout = true;
+            $this->common_class->inovio_logger( 'DEBUG ACH: Using direct POST keys from WooCommerce Blocks', $this );
+
+            $routing_number = str_replace( array( ' ', '-' ), '', wc_clean( $_POST['routing_number'] ) );
+            $account_number = isset( $_POST['account_number'] ) ? wc_clean( $_POST['account_number'] ) : '';
+            $account_holder = isset( $_POST['account_holder'] ) ? wc_clean( $_POST['account_holder'] ) : '';
+            $account_type = isset( $_POST['account_type'] ) ? wc_clean( $_POST['account_type'] ) : 'checking';
+        }
+        // Method 2: payment_data wrapper (alternative format)
+        elseif ( isset( $_POST['payment_data'] ) ) {
+            $is_blocks_checkout = true;
+            $this->common_class->inovio_logger( 'DEBUG ACH: Using payment_data wrapper', $this );
+
+            $payment_data = is_string( $_POST['payment_data'] )
+                ? json_decode( stripslashes( $_POST['payment_data'] ), true )
+                : $_POST['payment_data'];
+
+            // Handle array of key-value pairs format from WooCommerce Blocks
+            if ( is_array( $payment_data ) && isset( $payment_data[0] ) && is_array( $payment_data[0] ) && isset( $payment_data[0]['key'] ) ) {
+                $this->common_class->inovio_logger( 'DEBUG ACH: Converting key-value array to associative array', $this );
+                $temp = [];
+                foreach ( $payment_data as $item ) {
+                    if ( isset( $item['key'] ) && isset( $item['value'] ) ) {
+                        $temp[ $item['key'] ] = $item['value'];
+                    }
+                }
+                $payment_data = $temp;
+            }
+
+            if ( isset( $payment_data['routing_number'] ) ) {
+                $routing_number = str_replace( array( ' ', '-' ), '', wc_clean( $payment_data['routing_number'] ) );
+            }
+            if ( isset( $payment_data['account_number'] ) ) {
+                $account_number = wc_clean( $payment_data['account_number'] );
+            }
+            if ( isset( $payment_data['account_holder'] ) ) {
+                $account_holder = wc_clean( $payment_data['account_holder'] );
+            }
+            if ( isset( $payment_data['account_type'] ) ) {
+                $account_type = wc_clean( $payment_data['account_type'] );
+            }
+        }
+
+        // Fallback to legacy checkout data
+        if ( empty( $routing_number ) ) {
+            $routing_number = !empty( wc_clean( $_POST['ach_inovio_routing_number'] ?? '' ) )
+                ? str_replace( array( ' ', '-' ), '', wc_clean( $_POST['ach_inovio_routing_number'] ) )
+                : '';
+            $account_number = !empty( wc_clean( $_POST['ach_inovio_account_number'] ?? '' ) )
+                ? wc_clean( $_POST['ach_inovio_account_number'] )
+                : '';
+        }
         try {
             if ( empty( $account_number ) ) {
                 throw new Exception( __( 'Please enter account number', $this->id ) );
@@ -348,8 +417,13 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
         } catch (Exception $ex) { // Add log
             $this->common_class->inovio_logger( $ex->getMessage(), $this );
             $this->common_class->inovio_logger( print_r( $parse_result, true ), $this );
-            
+
             wc_add_notice( $ex->getMessage(), 'error' );
+            // Return error array to prevent null return value
+            return array(
+                'result'   => 'failure',
+                'messages' => $ex->getMessage()
+            );
         }
     }
 

@@ -86,11 +86,19 @@ class InovioServiceConfig {
 	 */
 	private function handle_response( $response ) {
 
+		// Check if the response is a WP_Error (connection failed, timeout, SSL error, etc.)
+		if ( is_wp_error( $response ) ) {
+			$error_message = $response->get_error_message();
+			error_log( 'Inovio API Connection Error: ' . $error_message );
+			throw new Exception( 'Payment gateway connection error: ' . $error_message );
+		}
+
+		// Now safe to access response array
 		if ( $response['response']['code'] != 200 ) {
 
 			throw new Exception( 'Error in payment processing request, please contact to your service provider.' );
 		}
-		
+
 		return $response['body'];
 	}
 

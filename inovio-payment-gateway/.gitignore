@@ -1,0 +1,9 @@
+# NPM dependencies
+node_modules/
+
+# Build output
+build/
+
+# Development files
+*.log
+.DS_Store

@@ -1,0 +1,26 @@
+{
+  "name": "inovio-payment-gateway",
+  "version": "5.8.0",
+  "description": "WooCommerce Blocks integration for Inovio Payment Gateway",
+  "scripts": {
+    "build": "wp-scripts build src/index.js --output-path=build",
+    "start": "wp-scripts start src/index.js --output-path=build"
+  },
+  "keywords": [
+    "woocommerce",
+    "payment-gateway",
+    "blocks",
+    "inovio"
+  ],
+  "author": "Inovio Payments",
+  "license": "GPLv2",
+  "devDependencies": {
+    "@woocommerce/dependency-extraction-webpack-plugin": "^2.2.0",
+    "@wordpress/scripts": "^27.0.0"
+  },
+  "dependencies": {
+    "@wordpress/element": "^5.0.0",
+    "@wordpress/html-entities": "^3.0.0",
+    "@wordpress/i18n": "^4.0.0"
+  }
+}

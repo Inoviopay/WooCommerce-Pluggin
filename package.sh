@@ -202,10 +202,64 @@ echo -e "${GREEN}✓ Build directories prepared${NC}"
 echo ""
 
 ################################################################################
-# Step 3: Copy Plugin Files
+# Step 3: Build JavaScript Assets
 ################################################################################
 
-echo -e "${BLUE}[3/8]${NC} Copying plugin files..."
+echo -e "${BLUE}[3/9]${NC} Building JavaScript assets..."
+
+# Check if Node.js is installed
+if ! command -v node &> /dev/null; then
+    echo -e "${RED}✗ Node.js is not installed${NC}"
+    echo -e "  Install: ${YELLOW}brew install node${NC} (macOS)"
+    echo -e "           ${YELLOW}https://nodejs.org/${NC} (other platforms)"
+    exit 1
+fi
+echo -e "${GREEN}✓ Node.js installed: $(node --version)${NC}"
+
+# Check if npm is installed
+if ! command -v npm &> /dev/null; then
+    echo -e "${RED}✗ npm is not installed${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ npm installed: $(npm --version)${NC}"
+
+# Navigate to plugin directory and build
+cd "$PLUGIN_DIR"
+
+# Install production dependencies
+echo -e "${YELLOW}Installing npm dependencies...${NC}"
+if ! npm install --production 2>&1 | grep -v "^npm warn"; then
+    echo -e "${RED}✗ Failed to install npm dependencies${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ Dependencies installed${NC}"
+
+# Build JavaScript assets
+echo -e "${YELLOW}Building JavaScript assets...${NC}"
+if ! npm run build 2>&1 | tail -5; then
+    echo -e "${RED}✗ Failed to build JavaScript assets${NC}"
+    exit 1
+fi
+echo -e "${GREEN}✓ JavaScript assets built${NC}"
+
+# Check that build directory was created
+if [ ! -d "build" ] || [ ! -f "build/index.js" ]; then
+    echo -e "${RED}✗ Build files not found after npm build${NC}"
+    echo -e "  Expected: build/index.js"
+    exit 1
+fi
+echo -e "${GREEN}✓ Build files verified${NC}"
+
+# Return to project root
+cd ..
+
+echo ""
+
+################################################################################
+# Step 4: Copy Plugin Files
+################################################################################
+
+echo -e "${BLUE}[4/9]${NC} Copying plugin files..."
 
 # Create plugin directory in build
 mkdir -p $BUILD_DIR/$PLUGIN_SLUG
