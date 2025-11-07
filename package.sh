@@ -625,17 +625,22 @@ if [ -n "$changelog_content" ]; then
     if [ -f "${PLUGIN_DIR}/readme.txt" ]; then
         echo -e "${YELLOW}Updating readme.txt with new changelog...${NC}"
 
-        # Generate WordPress format changelog
-        wordpress_changelog=$(generate_changelog_from_commits "$VERSION" "wordpress")
+        # Generate WordPress format changelog to a temp file (avoids awk -v newline issues)
+        local changelog_tmp="/tmp/changelog_$$.txt"
+        generate_changelog_from_commits "$VERSION" "wordpress" > "$changelog_tmp"
 
         # Find == Changelog == section and insert new entry
         if grep -q "== Changelog ==" "${PLUGIN_DIR}/readme.txt"; then
-            # Create temp file with updated changelog
-            awk -v new_entry="$wordpress_changelog" '
+            # Use awk with getline to read the changelog file (handles multiline properly)
+            awk -v changelog_file="$changelog_tmp" '
                 /== Changelog ==/ {
                     print $0
                     print ""
-                    print new_entry
+                    # Read and print the entire changelog file
+                    while ((getline line < changelog_file) > 0) {
+                        print line
+                    }
+                    close(changelog_file)
                     print ""
                     skip_first_blank=1
                     next
@@ -647,6 +652,7 @@ if [ -n "$changelog_content" ]; then
                 { print }
             ' "${PLUGIN_DIR}/readme.txt" > "${PLUGIN_DIR}/readme.txt.tmp"
 
+            rm -f "$changelog_tmp"
             mv "${PLUGIN_DIR}/readme.txt.tmp" "${PLUGIN_DIR}/readme.txt"
 
             # Commit readme.txt update
