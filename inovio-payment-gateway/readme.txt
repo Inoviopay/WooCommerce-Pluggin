@@ -49,6 +49,12 @@ Get answers on pricing, feature implementation, API integration, and more... at 
 
 == Changelog ==
 
+= 5.18.0 - 2025-11-07 =
+* Fixed: Fix awk error when updating changelog with multiline content
+* Fixed: Fix API endpoint setting key mismatch
+* Fixed: Fix changelog generation for multiline commit messages
+* Other: Remove 'local' keyword from script scope
+
 No changes in this release.
 
 No changes in this release.
