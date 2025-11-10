@@ -87,11 +87,11 @@ class class_common_inovio_payment {
     public function merchant_credential( $options ) {
         // Get settings directly from database to ensure they're always available
         // This is more reliable than using instance properties which may not be initialized
-        // Use the actual database key names (apiEndPoint, user_id, password) - must match form field names
+        // Use the actual database key names - must match form field names in class-inovio-payment-shortcodes.php
         $api_endpoint = $options->get_option( 'apiEndPoint' );
         $site_id = $options->get_option( 'site_id' );
-        $req_username = $options->get_option( 'user_id' );
-        $req_password = $options->get_option( 'password' );
+        $req_username = $options->get_option( 'req_username' );
+        $req_password = $options->get_option( 'req_password' );
 
         // Debug logging
         $this->inovio_logger( 'DEBUG merchant_credential: api_endpoint = ' . ( $api_endpoint ? 'SET' : 'NOT SET' ), $options );
