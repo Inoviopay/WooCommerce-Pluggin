@@ -148,8 +148,8 @@ class Inovio_Direct_Method extends WC_Payment_Gateway {
 
             if ($this->debug == 'yes') :
                 // Add log
-                $this->inovio_logger( 'Transaction Failed', $this );
-                $this->inovio_logger( $response, $this );
+                $this->common_class->inovio_logger( 'Transaction Failed', $this );
+                $this->common_class->inovio_logger( $response, $this );
             endif;
             die();
         }
@@ -212,7 +212,7 @@ class Inovio_Direct_Method extends WC_Payment_Gateway {
             
         } else {
             $order->add_order_note( 'Order already refunded or something went wrong' );
-            $this->inovio_logger( $response, $this );
+            $this->common_class->inovio_logger( $response, $this );
             return false;
         }
     }
