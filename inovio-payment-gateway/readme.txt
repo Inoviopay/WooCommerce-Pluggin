@@ -49,6 +49,9 @@ Get answers on pricing, feature implementation, API integration, and more... at 
 
 == Changelog ==
 
+= 5.27.0 - 2025-12-12 =
+* Fixed: Fix undefined inovio_logger() method in subscription payments
+
 = 5.24.0 - 2025-11-10 =
 * Other: Remove AJAX routing number validation from ACH payment flow
 
