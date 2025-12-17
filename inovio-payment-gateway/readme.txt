@@ -49,6 +49,10 @@ Get answers on pricing, feature implementation, API integration, and more... at 
 
 == Changelog ==
 
+= 5.31.0 - 2025-12-17 =
+* Security: Fix legacy code patterns for HPOS compatibility and security
+* Fixed: Fix subscription renewal payments using modern WCS API
+
 = 5.27.0 - 2025-12-12 =
 * Fixed: Fix undefined inovio_logger() method in subscription payments
 
