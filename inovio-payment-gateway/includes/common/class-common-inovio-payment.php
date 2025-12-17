@@ -208,7 +208,7 @@ class class_common_inovio_payment {
     */
 
     public function get_order_params( $order_id, $post_data, $expiry_date = "" ) {
-        $order = new WC_Order( $order_id );
+        $order = wc_get_order( $order_id );
         $pmt_key_or_routing_number = [];
         $pmt_number = "";
         if ( !empty( $post_data["ach_inovio_routing_number"] ) && strlen( $post_data["ach_inovio_routing_number"] ) > 3 && $post_data["payment_method"] == "achinoviomethod" ) {
@@ -222,11 +222,15 @@ class class_common_inovio_payment {
             $pmt_key_or_routing_number = ["pmt_key" => wc_clean( $post_data["card_cvv"] )];
             $pmt_number = isset( $post_data["card_number"] ) ? $post_data["card_number"] : "";
         }
+        // Use HPOS-compatible method for customer IP
+        $customer_ip = $order->get_customer_ip_address();
+        $customer_ip = ( $customer_ip == "::1" ) ? "127.0.0.1" : $customer_ip;
+
         $params=  [
             'XTL_ORDER_ID' => $order_id,
             'bill_addr' => $order->get_billing_address_1() . ' ' . $order->get_billing_address_2(),
             'pmt_numb' => $pmt_number,
-            'xtl_ip' => get_post_meta( $order_id, '_customer_ip_address', true ) == "::1" ? "127.0.0" : get_post_meta( $order_id, '_customer_ip_address', true ),
+            'xtl_ip' => $customer_ip,
             'cust_fname' => $order->get_billing_first_name(),
             'cust_lname' => $order->get_billing_last_name(),
             'pmt_expiry' => $expiry_date,

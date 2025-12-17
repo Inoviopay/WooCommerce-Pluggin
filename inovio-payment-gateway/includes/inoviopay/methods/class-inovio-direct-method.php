@@ -242,9 +242,13 @@ class Inovio_Direct_Method extends WC_Payment_Gateway {
      * @param  int $order_id
      */
     public function inovio_get_total_refunded( $order_id = null ) {
-        $order = new WC_Order( $order_id );
         global $wpdb;
-        $qry = "SELECT sum( inovio_refunded_amount ) as  already_refunded_amount from {$wpdb->prefix}inovio_refunded as t1 WHERE t1.inovio_order_id=$order_id";
+        $qry = $wpdb->prepare(
+            "SELECT sum( inovio_refunded_amount ) as already_refunded_amount
+             FROM {$wpdb->prefix}inovio_refunded
+             WHERE inovio_order_id = %d",
+            $order_id
+        );
         $resultset = $wpdb->get_results( $qry, OBJECT );
         return $resultset[0]->already_refunded_amount;
     }
@@ -369,8 +373,7 @@ class Inovio_Direct_Method extends WC_Payment_Gateway {
             }
             // Restrict product's quantity
             if ( $this->common_class->restrict_quantity( $this ) == false ) {
-                global $woocommerce;
-                $cart_url = $woocommerce->cart->get_cart_url();
+                $cart_url = wc_get_cart_url();
                 throw new Exception(
                 __(
                         "For any single product's quantity should not be greater than " .

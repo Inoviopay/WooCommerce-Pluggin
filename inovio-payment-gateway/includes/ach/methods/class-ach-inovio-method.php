@@ -106,11 +106,11 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
             }
 
             // Transaction_id will be only found in case of inovio payment method
-            $transaction_id = get_post_meta( $order_id, '_achtransaction_id', true );
+            $transaction_id = $order->get_meta( '_achtransaction_id' );
             $this->common_class->inovio_logger( "transaction_id-".$transaction_id, $this );
             $this->common_class->inovio_logger( "order_id-".$order_id, $this );
 
-            if ( get_post_meta( $order_id, '_payment_method', true ) != 'achinoviomethod' || empty( $transaction_id ) ) {
+            if ( $order->get_payment_method() != 'achinoviomethod' || empty( $transaction_id ) ) {
                 return;
             }
             
@@ -157,8 +157,6 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
      * @param type $order_id
      */
     public function ach_inovio_get_total_refunded( $order_id = null ) {
-
-        $order = new WC_Order( $order_id );
         global $wpdb;
         $qry = $wpdb->prepare(
             "SELECT sum( ach_inovio_refunded_amount ) as already_refunded_amount
@@ -297,8 +295,7 @@ class Ach_Inovio_Method extends WC_Payment_Gateway {
             // Restrict product's quantity
             if ( $this->common_class->restrict_quantity( $this ) == false ) {
 
-                global $woocommerce;
-                $cart_url = $woocommerce->cart->get_cart_url();
+                $cart_url = wc_get_cart_url();
                 throw new Exception(
                 __(
                         "For any single product's quantity should not be greater than " .
