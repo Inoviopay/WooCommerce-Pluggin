@@ -156,18 +156,46 @@ class class_common_inovio_payment {
     */
 
     public function get_order_params_subscription( $order_id ) {
-        $order = new WC_Order( $order_id );
-        $parent_order_id = WC_Subscriptions_Renewal_Order::get_parent_order_id( $order_id );
-        update_post_meta( $order->get_id(), '_inovio_gateway_scheduled_subscription_custid', get_post_meta( $parent_order_id, 'CUST_ID', true ) );
-        $params=  [
-        'CUST_ID' => get_post_meta( $parent_order_id, 'CUST_ID', true ) == "" ? "" : get_post_meta( $parent_order_id, 'CUST_ID', true ),
-        'PMT_L4' => get_post_meta( $parent_order_id, 'PMT_L4', true ) == "" ? "" : get_post_meta( $parent_order_id, 'PMT_L4', true ),
-        'REQUEST_REBILL' => 1,
-        'request_action' => 'CCAUTHCAP',
-        'request_currency' => get_woocommerce_currency(),
-        'XTL_ORDER_ID' => $order_id,
-        ];                                                        
-        return $params;           
+        $renewal_order = wc_get_order( $order_id );
+        $cust_id = '';
+        $pmt_l4 = '';
+
+        // Get the subscription(s) for this renewal order using modern WCS API
+        if ( function_exists( 'wcs_get_subscriptions_for_order' ) ) {
+            $subscriptions = wcs_get_subscriptions_for_order( $order_id, array( 'order_type' => 'renewal' ) );
+
+            foreach ( $subscriptions as $subscription ) {
+                // First, try to get CUST_ID from the subscription itself (preferred method)
+                $cust_id = $subscription->get_meta( '_inovio_cust_id' );
+                $pmt_l4 = $subscription->get_meta( '_inovio_pmt_l4' );
+
+                // Fallback: try the parent order if not found on subscription
+                if ( empty( $cust_id ) ) {
+                    $parent_order = $subscription->get_parent();
+                    if ( $parent_order ) {
+                        $cust_id = $parent_order->get_meta( 'CUST_ID' );
+                        $pmt_l4 = $parent_order->get_meta( 'PMT_L4' );
+                    }
+                }
+
+                // We only need one subscription's data
+                break;
+            }
+        }
+
+        // Store for debugging
+        $renewal_order->update_meta_data( '_inovio_gateway_scheduled_subscription_custid', $cust_id );
+        $renewal_order->save();
+
+        $params = [
+            'CUST_ID' => $cust_id,
+            'PMT_L4' => $pmt_l4,
+            'REQUEST_REBILL' => 1,
+            'request_action' => 'CCAUTHCAP',
+            'request_currency' => get_woocommerce_currency(),
+            'XTL_ORDER_ID' => $order_id,
+        ];
+        return $params;
     }
 
     /**

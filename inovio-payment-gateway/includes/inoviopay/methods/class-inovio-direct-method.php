@@ -443,6 +443,17 @@ class Inovio_Direct_Method extends WC_Payment_Gateway {
                     // Payment complete add PO_ID as transaction id in post_meta table
                     $order->payment_complete( $parse_result->PO_ID );
 
+                    // Store payment token on subscription for future renewals (WooCommerce Subscriptions)
+                    if ( function_exists( 'wcs_get_subscriptions_for_order' ) ) {
+                        $subscriptions = wcs_get_subscriptions_for_order( $order_id, array( 'order_type' => 'parent' ) );
+                        foreach ( $subscriptions as $subscription ) {
+                            $subscription->update_meta_data( '_inovio_cust_id', $parse_result->CUST_ID );
+                            $subscription->update_meta_data( '_inovio_pmt_l4', $parse_result->PMT_L4 );
+                            $subscription->save();
+                            $this->common_class->inovio_logger( 'Stored CUST_ID on subscription #' . $subscription->get_id() . ': ' . $parse_result->CUST_ID, $this );
+                        }
+                    }
+
                     // Reduce stock - handled automatically by payment_complete() in modern WC
                     wc_reduce_stock_levels( $order_id );
 
