@@ -110,7 +110,7 @@ define('WP_DEBUG_DISPLAY', true);
 define('SCRIPT_DEBUG', true);
 
 // Inovio test credentials
-define('INOVIO_TEST_ENDPOINT', 'https://gateway-test.inoviopay.com/payment/pmt_service.cfm');
+define('INOVIO_TEST_ENDPOINT', 'https://t1api.inoviopay.com/payment/pmt_service.cfm');
 define('INOVIO_TEST_SITE_ID', 'TESTBANK');
 define('INOVIO_TEST_USERNAME', 'test_user');
 define('INOVIO_TEST_PASSWORD', 'test_password');

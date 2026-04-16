@@ -73,7 +73,7 @@ After activating the plugin:
 | **Enable/Disable** | Enable Inovio credit card payments | ✓ Enabled |
 | **Title** | Payment method name shown to customers | "Credit Card" |
 | **Description** | Checkout page description | "Pay securely with your credit card" |
-| **API Endpoint** | Inovio gateway URL | `https://gateway.inoviopay.com/payment/pmt_service.cfm` |
+| **API Endpoint** | Inovio gateway URL | `https://api.inoviopay.com/payment/pmt_service.cfm` |
 | **Site ID** | Your Inovio site identifier | `YOURSITE123` |
 | **Username** | API authentication username | `api_user` |
 | **Password** | API authentication password | `your_api_password` |

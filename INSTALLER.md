@@ -189,7 +189,7 @@ If tables are missing, deactivate and reactivate the plugin.
 
 | Field | Example | Where to Find |
 |-------|---------|---------------|
-| **API Endpoint** | `https://gateway.inoviopay.com/payment/pmt_service.cfm` | Provided by Inovio support |
+| **API Endpoint** | `https://api.inoviopay.com/payment/pmt_service.cfm` | Provided by Inovio support |
 | **Site ID** | `MERCHANT123` | Merchant portal or welcome email |
 | **Request Username** | `api_user_prod` | Merchant portal > Settings > API |
 | **Request Password** | `your_secure_password` | Merchant portal > Settings > API |
@@ -273,7 +273,7 @@ chmod 755 ../../../wp-content/uploads/wc-logs/
 
 Typical test credentials (verify with Inovio):
 ```
-API Endpoint: https://gateway-test.inoviopay.com/payment/pmt_service.cfm
+API Endpoint: https://t1api.inoviopay.com/payment/pmt_service.cfm
 Site ID: TESTBANK
 Username: test_user
 Password: test_password
@@ -354,7 +354,7 @@ Password: test_password
 1. Navigate to **WooCommerce > Settings > Payments > Inovio**
 2. Update API credentials:
    ```
-   API Endpoint: https://gateway.inoviopay.com/payment/pmt_service.cfm
+   API Endpoint: https://api.inoviopay.com/payment/pmt_service.cfm
    Site ID: [Your Production Site ID]
    Username: [Production Username]
    Password: [Production Password]
@@ -429,7 +429,7 @@ define('WP_DEBUG_LOG', true);
 **Error: "Invalid API endpoint URL"**
 
 *Solution:*
-- Verify URL is exactly: `https://gateway.inoviopay.com/payment/pmt_service.cfm`
+- Verify URL is exactly: `https://api.inoviopay.com/payment/pmt_service.cfm`
 - No trailing spaces or slashes
 - Must start with `https://`
 
